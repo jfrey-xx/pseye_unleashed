@@ -50,6 +50,9 @@
 
 #define CTRL_TIMEOUT 500
 
+#define BLUE_BALANCE_DEFAULT	128
+#define RED_BALANCE_DEFAULT	128
+
 MODULE_AUTHOR("Antonio Ospite <ospite@studenti.unina.it>");
 MODULE_DESCRIPTION("GSPCA/OV534 USB Camera Driver");
 MODULE_LICENSE("GPL");
@@ -76,7 +79,10 @@ struct sd {
 	struct v4l2_ctrl *hflip;
 	struct v4l2_ctrl *vflip;
 	struct v4l2_ctrl *plfreq;
-
+        
+	struct v4l2_ctrl *redblc;
+	struct v4l2_ctrl *blueblc;
+	
 	__u32 last_pts;
 	u16 last_fid;
 	u8 frame_rate;
@@ -89,9 +95,11 @@ enum sensors {
 	NSENSORS
 };
 
+static int redblc = RED_BALANCE_DEFAULT;
+static int blueblc = BLUE_BALANCE_DEFAULT;
+
 static int sd_start(struct gspca_dev *gspca_dev);
 static void sd_stopN(struct gspca_dev *gspca_dev);
-
 
 static const struct v4l2_pix_format ov772x_mode[] = {
 	{320, 240, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
@@ -262,6 +270,8 @@ static const u8 sensor_init_767x[][2] = {
 	{0xb2, 0x0e},
 	{0xb3, 0x82},
 	{0xb8, 0x0a},
+	{0x32, 0x0a},
+//	{0x42, 0x0a},
 	{0x43, 0x0a},
 	{0x44, 0xf0},
 	{0x45, 0x34},
@@ -965,17 +975,39 @@ static void setagc(struct gspca_dev *gspca_dev, s32 val)
 	}
 }
 
+static void setredblc(struct gspca_dev *gspca_dev, s32 val)
+{
+   //struct sd *sd = (struct sd *) gspca_dev;
+   redblc = val;
+   sccb_reg_write(gspca_dev, 0x43, val);
+}
+
+static void setblueblc(struct gspca_dev *gspca_dev, s32 val)
+{
+   //struct sd *sd = (struct sd *) gspca_dev;
+   blueblc = val;
+   sccb_reg_write(gspca_dev, 0x42, val);
+}
+
 static void setawb(struct gspca_dev *gspca_dev, s32 val)
 {
 	struct sd *sd = (struct sd *) gspca_dev;
 
 	if (val) {
+		// reset red and blue balance upon activation
+		sccb_reg_write(gspca_dev, 0x43, RED_BALANCE_DEFAULT);
+		sccb_reg_write(gspca_dev, 0x42, BLUE_BALANCE_DEFAULT);
+		
 		sccb_reg_write(gspca_dev, 0x13,
 				sccb_reg_read(gspca_dev, 0x13) | 0x02);
 		if (sd->sensor == SENSOR_OV772x)
 			sccb_reg_write(gspca_dev, 0x63,
 				sccb_reg_read(gspca_dev, 0x63) | 0xc0);
 	} else {
+		// restore previous values for red and blue upon deactivation
+		sccb_reg_write(gspca_dev, 0x43, redblc);
+		sccb_reg_write(gspca_dev, 0x42, blueblc);
+		
 		sccb_reg_write(gspca_dev, 0x13,
 				sccb_reg_read(gspca_dev, 0x13) & ~0x02);
 		if (sd->sensor == SENSOR_OV772x)
@@ -1137,6 +1169,12 @@ static int ov534_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_POWER_LINE_FREQUENCY:
 		setlightfreq(gspca_dev, ctrl->val);
 		break;
+	case V4L2_CID_RED_BALANCE:
+		setredblc(gspca_dev, ctrl->val);
+		break;
+	case V4L2_CID_BLUE_BALANCE:
+		setblueblc(gspca_dev, ctrl->val);
+		break;
 	}
 	return gspca_dev->usb_err;
 }
@@ -1163,6 +1201,12 @@ static int sd_init_controls(struct gspca_dev *gspca_dev)
 	int exposure_max;
 	int exposure_def;
 	int hflip_def;
+	int redblc_min = 0;
+	int redblc_def = RED_BALANCE_DEFAULT;
+	int redblc_max = 255;
+	int blueblc_min = 0;
+	int blueblc_def = BLUE_BALANCE_DEFAULT;
+	int blueblc_max = 255;
 
 	if (sd->sensor == SENSOR_OV767x) {
 		saturation_min = 0,
@@ -1239,7 +1283,12 @@ static int sd_init_controls(struct gspca_dev *gspca_dev)
 			V4L2_CID_POWER_LINE_FREQUENCY,
 			V4L2_CID_POWER_LINE_FREQUENCY_50HZ, 0,
 			V4L2_CID_POWER_LINE_FREQUENCY_DISABLED);
-
+        
+	sd->redblc = v4l2_ctrl_new_std(hdl, &ov534_ctrl_ops,
+                        V4L2_CID_RED_BALANCE, redblc_min, redblc_max, 1, redblc_def);
+	sd->blueblc = v4l2_ctrl_new_std(hdl, &ov534_ctrl_ops,
+                        V4L2_CID_BLUE_BALANCE, blueblc_min, blueblc_max, 1, blueblc_def);
+        
 	if (hdl->error) {
 		pr_err("Could not initialize controls\n");
 		return hdl->error;
