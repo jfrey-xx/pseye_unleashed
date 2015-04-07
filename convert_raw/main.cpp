@@ -37,6 +37,51 @@ static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw,
 	}
 }
 
+/**
+ * Convert a packed array of n elements with vw useful bits into array of
+ * 8bit elements, dropping LSB.
+ *
+ * @param src The source packed array, of size (n * vw / 8) bytes
+ * @param dest The destination unpacked array, of size (n * 2) bytes
+ * @param vw The virtual width of elements, that is the number of useful bits for each of them
+ * @param n The number of elements (in particular, of the destination array), NOT a length in bytes
+ *
+ * @pre vw is expected to be >= 8.
+ */
+static inline void convert_packed_to_8bit(uint8_t *src, uint8_t *dest, int vw, int n)
+{
+	uint32_t buffer = 0;
+	int bitsIn = 0;
+	while (n--) {
+		while (bitsIn < vw) {
+			buffer = (buffer << 8) | *(src++);
+			bitsIn += 8;
+		}
+		bitsIn -= vw;
+		*(dest++) = buffer >> (bitsIn + vw - 8);
+	}
+}
+
+void print_mat(Mat mat) {
+  //	  printf("%d ", mat.step);
+  for (int j=0;j<mat.rows;j++) {
+    printf("%d[",j);
+      for (int i=0;i< mat.cols ;i++) {
+  	printf("%d ", mat.data[mat.cols*j+i]);
+  	}
+  	    printf("]\n");
+    }
+// unsigned char *input = (unsigned char*)(mat.data);
+
+//   for (int i=0;i<mat.rows;i++) {
+//     printf("%d[",i);
+//       for (int j=0;j< mat.cols ;j++) {
+// 	printf("j%d[%d] ", i,input[mat.step*j+i]);
+// 	}
+// 	    printf("]\n");
+//     }
+
+}
 
 int main ()
 {
@@ -53,6 +98,7 @@ int main ()
     printf("Program started\n");
 
     cv::Mat pack = Mat(ImageSize, CV_16UC1); // packed
+    cv::Mat pack8 = Mat(ImageSize, CV_8UC1); // packed
 
     cv::Mat pOpenCVImage = Mat(ImageSize, CV_16UC1); //cvCreateImage(ImageSize , IPL_DEPTH_16U, 1 ); // Grayscale
 
@@ -76,7 +122,8 @@ int len = num_el*pOpenCVImage.elemSize1();
 int SizeY = 480;
 int SizeX = 640;
 
- short unsigned int buffer[ImageSize.width*ImageSize.height];
+  unsigned short int buffer[ImageSize.width*ImageSize.height];
+  unsigned char buffer8[ImageSize.width*ImageSize.height];
     while(wKey == -1 )
     {
         ImageBuffer = snapFrame();
@@ -87,9 +134,14 @@ int SizeX = 640;
 	    
 	       memcpy( pOpenCVImage.data, ImageBuffer, len);
 
+	       convert_packed_to_8bit(ImageBuffer, buffer8, 8, ImageSize.width * ImageSize.height );
+	       memcpy( pack8.data, buffer8, len/2);
+
 	       convert_packed_to_16bit(ImageBuffer, buffer, 10, ImageSize.width * ImageSize.height );
 	       memcpy( pack.data, buffer, len);
-	 imshow( "tadam", pack ); 
+
+	 imshow( "tadam8", pack8 ); 
+	 imshow( "tadam", pack );
 
 	       printf("pix1[%d]", pOpenCVImage.data[43]);
       printf("pix2[%d]\n", pack.data[43]);
@@ -117,6 +169,15 @@ cv::cvtColor(Mat8Bit, MatRgb, CV_BayerBG2RGB);
 
 imshow( "Display window 8", Mat8Bit ); 
 imshow( "Display window rgb", MatRgb ); 
+
+
+
+//////////////////////////
+ print_mat(pOpenCVImage);
+
+
+
+////////////////////////
 
 	   // cvShowImage( (char*)"Camera2",MatRgb);
             wKey = cvWaitKey(10);
