@@ -102,12 +102,12 @@ static int sd_start(struct gspca_dev *gspca_dev);
 static void sd_stopN(struct gspca_dev *gspca_dev);
 
 static const struct v4l2_pix_format ov772x_mode[] = {
-	{320, 240, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
+  {320, 240, V4L2_PIX_FMT_SBGGR10, V4L2_FIELD_NONE,
 	 .bytesperline = 320 * 2,
 	 .sizeimage = 320 * 240 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
 	 .priv = 1},
-	{640, 480, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
+	{640, 480, V4L2_PIX_FMT_SBGGR10, V4L2_FIELD_NONE,
 	 .bytesperline = 640 * 2,
 	 .sizeimage = 640 * 480 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
@@ -585,7 +585,7 @@ static const u8 bridge_start_vga_772x[][2] = {
 };
 static const u8 sensor_start_vga_772x[][2] = {
   //	{0x12, 0x00},
-        {0x66, 0x80}, // DSP3
+        {0x66, 0x00}, // DSP3
         {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
 	{0x0c, 0x00}, // COM3
         {0x12, 0x13}, // COM7 SENSOR_RAW | OFMT_BRAW,
@@ -610,7 +610,7 @@ static const u8 bridge_start_qvga_772x[][2] = {
 };
 static const u8 sensor_start_qvga_772x[][2] = {
   //	{0x12, 0x40},
-        {0x66, 0x80}, // DSP3
+        {0x66, 0x00}, // DSP3
         {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
 	{0x0c, 0x00}, // COM3
         {0x12, 0x53}, // COM7 SENSOR_RAW | OFMT_BRAW,
