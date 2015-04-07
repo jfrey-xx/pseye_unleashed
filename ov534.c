@@ -111,7 +111,7 @@ static const struct v4l2_pix_format ov772x_mode[] = {
 	 .bytesperline = 640 * 2,
 	 .sizeimage = 640 * 480 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
-	 .priv = 0},
+	 .priv = 1}, // set to 1 for raw
 };
 static const struct v4l2_pix_format ov767x_mode[] = {
 	{320, 240, V4L2_PIX_FMT_JPEG, V4L2_FIELD_NONE,
@@ -584,7 +584,11 @@ static const u8 bridge_start_vga_772x[][2] = {
 	{0xc1, 0x3c},
 };
 static const u8 sensor_start_vga_772x[][2] = {
-	{0x12, 0x00},
+  //	{0x12, 0x00},
+        {0x66, 0x80}, // DSP3
+        {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
+	{0x0c, 0x00}, // COM3
+        {0x12, 0x13}, // COM7 SENSOR_RAW | OFMT_BRAW,
 	{0x17, 0x26},
 	{0x18, 0xa0},
 	{0x19, 0x07},
@@ -605,7 +609,11 @@ static const u8 bridge_start_qvga_772x[][2] = {
 	{0xc1, 0x1e},
 };
 static const u8 sensor_start_qvga_772x[][2] = {
-	{0x12, 0x40},
+  //	{0x12, 0x40},
+        {0x66, 0x80}, // DSP3
+        {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
+	{0x0c, 0x00}, // COM3
+        {0x12, 0x53}, // COM7 SENSOR_RAW | OFMT_BRAW,
 	{0x17, 0x3f},
 	{0x18, 0x50},
 	{0x19, 0x03},
