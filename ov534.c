@@ -28,6 +28,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
+
+
+#define RAWBIT 0x40
+
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #define MODULE_NAME "ov534"
@@ -101,13 +105,15 @@ static int blueblc = BLUE_BALANCE_DEFAULT;
 static int sd_start(struct gspca_dev *gspca_dev);
 static void sd_stopN(struct gspca_dev *gspca_dev);
 
+// V4L2_COLORSPACE_SRGB
+// V4L2_PIX_FMT_YUYV
 static const struct v4l2_pix_format ov772x_mode[] = {
-	{320, 240, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
+  {320, 240,  V4L2_PIX_FMT_SBGGR8,   V4L2_FIELD_NONE,
 	 .bytesperline = 320 * 2,
-	 .sizeimage = 320 * 240 * 2,
+   .sizeimage = 320 * 240 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
 	 .priv = 1},
-	{640, 480, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
+	{640, 480,   V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
 	 .bytesperline = 640 * 2,
 	 .sizeimage = 640 * 480 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
@@ -459,7 +465,7 @@ static const u8 bridge_init_772x[][2] = {
 	{ 0x21, 0xf0 },
 
 	{ 0x1c, 0x00 },
-	{ 0x1d, 0x40 },
+	{ 0x1d, RAWBIT },
 	{ 0x1d, 0x02 }, /* payload size 0x0200 * 4 = 2048 bytes */
 	{ 0x1d, 0x00 }, /* payload size */
 
@@ -572,9 +578,12 @@ static const u8 sensor_init_772x[][2] = {
 	{ 0x8e, 0x00 },		/* De-noise threshold */
 	{ 0x0c, 0xd0 }
 };
+
+
 static const u8 bridge_start_vga_772x[][2] = {
 	{0x1c, 0x00},
-	{0x1d, 0x40},
+	/*{0x1d, 0x40},*/ /*YUV422 ?? */
+	{0x1d, RAWBIT}, /*RAW8 */
 	{0x1d, 0x02},
 	{0x1d, 0x00},
 	{0x1d, 0x02},
@@ -584,7 +593,8 @@ static const u8 bridge_start_vga_772x[][2] = {
 	{0xc1, 0x3c},
 };
 static const u8 sensor_start_vga_772x[][2] = {
-	{0x12, 0x00},
+		{0x12, 0x13}, // VGA
+//  {0x12, 0x13}, // RAW10
 	{0x17, 0x26},
 	{0x18, 0xa0},
 	{0x19, 0x07},
@@ -595,7 +605,8 @@ static const u8 sensor_start_vga_772x[][2] = {
 };
 static const u8 bridge_start_qvga_772x[][2] = {
 	{0x1c, 0x00},
-	{0x1d, 0x40},
+	/*{0x1d, 0x40},*/ /*YUV422 ?? */
+	{0x1d, RAWBIT}, /*RAW10 */
 	{0x1d, 0x02},
 	{0x1d, 0x00},
 	{0x1d, 0x01},
@@ -605,7 +616,11 @@ static const u8 bridge_start_qvga_772x[][2] = {
 	{0xc1, 0x1e},
 };
 static const u8 sensor_start_qvga_772x[][2] = {
-	{0x12, 0x40},
+  /*	{0x12, 0x40},*/ // YUV
+  {0x12, 0x53}, // RAW10
+  {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
+  {0x66, 0x00}, // DSP3 0
+  // {0x0c, 0x00}, // COM3 -- 00 for sensor color bar ??
 	{0x17, 0x3f},
 	{0x18, 0x50},
 	{0x19, 0x03},
@@ -1448,6 +1463,9 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 	int payload_len;
 
 	payload_len = gspca_dev->cam.bulk ? 2048 : 2040;
+
+	pr_err("paylen: %d, len: %d, bulk: %d, img_len: %d\n", payload_len, len, gspca_dev->cam.bulk, gspca_dev->image_len );
+
 	do {
 		len = min(remaining_len, payload_len);
 
@@ -1459,19 +1477,22 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 		/* Verify UVC header.  Header length is always 12 */
 		if (data[0] != 12 || len < 12) {
 			PDEBUG(D_PACK, "bad header");
-			goto discard;
+    pr_err("bad header");
+    //	goto discard;
 		}
 
 		/* Check errors */
 		if (data[1] & UVC_STREAM_ERR) {
 			PDEBUG(D_PACK, "payload error");
-			goto discard;
+    pr_err("payload error");
+    //	goto discard;
 		}
 
 		/* Extract PTS and FID */
 		if (!(data[1] & UVC_STREAM_PTS)) {
 			PDEBUG(D_PACK, "PTS not present");
-			goto discard;
+        pr_err("PTS not present");
+	//	goto discard;
 		}
 		this_pts = (data[5] << 24) | (data[4] << 16)
 						| (data[3] << 8) | data[2];
@@ -1494,7 +1515,8 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev,
 				   gspca_dev->pixfmt.width *
 					gspca_dev->pixfmt.height * 2) {
 				PDEBUG(D_PACK, "wrong sized frame");
-				goto discard;
+	                   pr_err("wrong sized frame");
+			   //	goto discard;
 			}
 			gspca_frame_add(gspca_dev, LAST_PACKET,
 					data + 12, len - 12);
