@@ -5,14 +5,6 @@
 
 using namespace cv;
 
-void ShowImage(char* Name, IplImage* Img, int Attribute )
-{
-    cvNamedWindow(Name, Attribute );
-    cvShowImage( Name, Img );
-    cvWaitKey(0);
-    cvDestroyWindow( Name );
-}
-
 
 /* Convert a packed array of n elements with vw useful bits into array of
  * zero-padded 16bit elements.
@@ -86,23 +78,31 @@ void print_mat(Mat mat) {
 int main ()
 {
 
-    CvSize ImageSize;
+  CvSize ImageSize, ImageSizeR;
     unsigned char* ImageBuffer = NULL;
     int wKey = -1;
+
 
     ImageSize.width = 320;
     ImageSize.height = 240;
 
-    cvNamedWindow( (char*)"Camera", 1 );
+    ImageSizeR.width = 240;
+    ImageSizeR.height = 320;
+
+    //    cvNamedWindow( (char*)"Camera", 1 );
 
     printf("Program started\n");
 
     cv::Mat pack = Mat(ImageSize, CV_16UC1); // packed
     cv::Mat pack8 = Mat(ImageSize, CV_8UC1); // packed
 
-    cv::Mat pOpenCVImage = Mat(ImageSize, CV_16UC1); //cvCreateImage(ImageSize , IPL_DEPTH_16U, 1 ); // Grayscale
+    cv::Mat pOpenCVImage = Mat(ImageSize, CV_8UC4); //cvCreateImage(ImageSize , IPL_DEPTH_16U, 1 ); // Grayscale
+    cv::Mat out = Mat(ImageSize, CV_8UC1);
+    cv::Mat colorz = Mat(ImageSize, CV_8UC3);
 
-    cv::Mat pColorCVImage = Mat(ImageSize, CV_16UC3);  //cvCreateImage(ImageSize , IPL_DEPTH_16U, 3 ); // Color image
+    cv::Mat mat16 = Mat(ImageSize, CV_8UC2);  //cvCreateImage(ImageSize , IPL_DEPTH_16U, 3 ); // Color image
+
+   cv::Mat mat16R = Mat(ImageSize, CV_8UC2);  //cvCreateImage(ImageSize , IPL_DEPTH_16U, 3 ); // Color image
 
     open_device((char*)"/dev/video0");
     init_device(ImageSize.width, ImageSize.height);
@@ -113,80 +113,125 @@ int main ()
     start_capturing();
 
 
+
+
     int rows = pOpenCVImage.rows;
 int cols = pOpenCVImage.cols;
 int num_el = rows*cols;
-int len = num_el*pOpenCVImage.elemSize1();
+ int inputChan = 2;
+int len = num_el * inputChan;
 
-    printf("Start capturing -%d-\n", len);
-int SizeY = 480;
-int SizeX = 640;
+ printf("Start capturing - %d by %d by %d for %d -\n",  pOpenCVImage.rows, pOpenCVImage.cols, pOpenCVImage.elemSize1(),     len);
 
   unsigned short int buffer[ImageSize.width*ImageSize.height];
   unsigned char buffer8[ImageSize.width*ImageSize.height];
     while(wKey == -1 )
     {
         ImageBuffer = snapFrame();
+	std::cout << "Length of array = " << sizeof(ImageBuffer) << ", bis: " <<sizeof(*ImageBuffer) << " ter: " << sizeof(*ImageBuffer) << std::endl;
 
         if( ImageBuffer != NULL )
         {
-            //memcpy( pOpenCVImage->imageData, ImageBuffer, pOpenCVImage->imageSize);
+	  //memcpy( pOpenCVImage->imageData, ImageBuffer, pOpenCVImage->imageSize);
 	    
-	       memcpy( pOpenCVImage.data, ImageBuffer, len);
+	  memcpy( pOpenCVImage.data, ImageBuffer, len);
+	  memcpy( mat16.data, ImageBuffer, len);
+	  //      memcpy( mat16R.data, mat16.data, len);
+	  //imshow( "all",  pOpenCVImage); 
+	  //imshow( "mat16",  mat16); 
 
-	       convert_packed_to_8bit(ImageBuffer, buffer8, 8, ImageSize.width * ImageSize.height );
-	       memcpy( pack8.data, buffer8, len/2);
+	  // vector<Mat> mat16chan(2);
 
-	       convert_packed_to_16bit(ImageBuffer, buffer, 10, ImageSize.width * ImageSize.height );
-	       memcpy( pack.data, buffer, len);
+	  //split(mat16, mat16chan);
+	  // imshow("mat16 chan1", mat16chan[0]);
+	  //imshow("mat16 chan2", mat16chan[1]);
+	       
+	  //imshow( "mat16R",  mat16R); 
+	  vector<Mat> channels(4);
+	  // split img:
+	  split(pOpenCVImage, channels);
 
-	 imshow( "tadam8", pack8 ); 
-	 imshow( "tadam", pack );
+	  // get ROIs out of noise
+	  // Mat GBg1
+	  Mat g1 = Mat( channels[0], Rect(0, 0, 80, 120));
+	  // Mat GBb1
+	  Mat b1 =  Mat( channels[0], Rect(160, 0, 80, 120));
+	  // Mat RGr2
+	  Mat r2 = Mat( channels[1], Rect(0, 0, 80, 120));
+	  // Mat RGg2
+	  Mat g2 =  Mat( channels[1], Rect(160, 0, 80, 120));
+	  // Mat GBg2
+	  Mat g3 = Mat( channels[2], Rect(0, 0, 80, 120));
+	  // Mat GBb2 =
+	  Mat b3 = Mat( channels[2], Rect(160, 0, 80, 120));
+	  // Mat RGr2 
+	  Mat r4 = Mat( channels[3], Rect(0, 0, 80, 120));
+	  // Mat RGg2 =
+	  Mat g4 = Mat( channels[3], Rect(160, 0, 80, 120));
 
-	       printf("pix1[%d]", pOpenCVImage.data[43]);
-      printf("pix2[%d]\n", pack.data[43]);
+	  	  imshow( "roi1",  g1 ); 
+	  	  imshow( "roi2",  b1); 
+	  	  imshow( "roi3",  g3); 
+	  	  imshow( "roi4",  b3); 
+	  	  imshow( "roi5",  r2); 
+	  	  imshow( "roi6",  g2); 
+	  	  imshow( "roi7",  r4); 
+	  	  imshow( "roi8",  g4); 
+	  
+	  // create back from 8 rois the bayer pattern
+	  // G1B1 G3B3 G1R1 ...
+	  // R2G2 R4G4 R2G2 ...
+	  for (int j=0;j<g1.rows;j++) {
+	    for (int i=0;i< g1.cols ;i++) {
+	      int step = g1.step*j+i;
+	      out.data[out.step*(j*2)+i*4] = g1.data[step];
+	      out.data[out.step*(j*2)+i*4+1] = b1.data[step];
+	      out.data[out.step*(j*2)+i*4+2] = g3.data[step];
+	      out.data[out.step*(j*2)+i*4+3] = b3.data[step];
 
-	 imshow( "orig", pOpenCVImage ); 
-	  cv::cvtColor(pOpenCVImage,  pColorCVImage, CV_BayerRG2RGB);
-           // cvCvtColor(pOpenCVImage,pColorCVImage,CV_BayerBG2RGB); // Create a color image from the raw data
+	      out.data[out.step*(j*2+1)+i*4] = r2.data[step];
+	      out.data[out.step*(j*2+1)+i*4+1] = g2.data[step];
+	      out.data[out.step*(j*2+1)+i*4+2] = r4.data[step];
+	      out.data[out.step*(j*2+1)+i*4+3] = g4.data[step];
+	    }
+	  }
 
-            //cvShowImage( (char*)"Camera",pColorCVImage);
-	  imshow( "Display window", pColorCVImage ); 
-	
-	  //	    printf("avant1.\n");
-	    //cv::Mat Mat16Bit(SizeY, SizeX, CV_16UC1, pOpenCVImage);
-	    cv::Mat Mat16Bit = pOpenCVImage.clone();
-	     //cv::Mat Mat8Bit(SizeY, SizeX, CV_16UC1, pOpenCVImage);
-	    //	    printf("avant2.\n");
-cv::Mat Mat8Bit = Mat16Bit.clone();
-//printf("avant3.\n");
-Mat8Bit.convertTo(Mat8Bit, CV_8UC3, 0.0625);
-//printf("avant4.\n");
-cv::Mat MatRgb(SizeY, SizeX, CV_8UC3);
-//printf("avant5.\n");
-cv::cvtColor(Mat8Bit, MatRgb, CV_BayerBG2RGB);
-//printf("avant6.\n");
+	  imshow("tadam", out);
 
-imshow( "Display window 8", Mat8Bit ); 
-imshow( "Display window rgb", MatRgb ); 
+	  //imshow( "chan1",  channels[0] ); 
+	  //imshow( "chan2",  channels[1]); 
+	  //imshow( "chan3",  channels[2] ); 
+	  //imshow( "chan4",  channels[3]); 
+
+	  //imshow( "Display window rgb",  pOpenCVImage ); 
+
+	  //	       convert_packed_to_8bit(ImageBuffer, buffer8, 10, ImageSize.width * ImageSize.height );
+	  //	       memcpy( pack8.data, buffer8, len/2);
+
+	  //	       convert_packed_to_16bit(ImageBuffer, buffer, 10, ImageSize.width * ImageSize.height );
+	  // memcpy( pack.data, buffer, len);
 
 
-
-//////////////////////////
- print_mat(pOpenCVImage);
+	  cv::cvtColor(out, colorz, CV_BayerGB2RGB);
+	  imshow( "Display window rgb", colorz ); 
 
 
 
-////////////////////////
+	  //////////////////////////
+	  // print_mat(pOpenCVImage);
 
-	   // cvShowImage( (char*)"Camera2",MatRgb);
-            wKey = cvWaitKey(10);
+
+
+	  ////////////////////////
+
+	  // cvShowImage( (char*)"Camera2",MatRgb);
+	  wKey = cvWaitKey(10);
         }
         else
-        {
+	  {
             printf("No image buffer retrieved.\n");
             break;
-        }
+	  }
     }
 
     cvDestroyWindow( (char*)"Camera" );
