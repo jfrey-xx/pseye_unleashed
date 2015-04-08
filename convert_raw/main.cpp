@@ -29,6 +29,34 @@ static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw,
 	}
 }
 
+// argo from http://web.stanford.edu/~sujason/ColorBalancing/simplestcb.html
+// implementation from http://web.stanford.edu/~sujason/ColorBalancing/simplestcb.html
+/// perform the Simplest Color Balancing algorithm
+void SimplestCB(Mat& in, Mat& out, float percent) {
+    assert(in.channels() == 3);
+    assert(percent > 0 && percent < 100);
+ 
+    float half_percent = percent / 200.0f;
+ 
+    vector<Mat> tmpsplit; split(in,tmpsplit);
+    for(int i=0;i<3;i++) {
+        //find the low and high precentile values (based on the input percentile)
+        Mat flat; tmpsplit[i].reshape(1,1).copyTo(flat);
+        cv::sort(flat,flat,CV_SORT_EVERY_ROW + CV_SORT_ASCENDING);
+        int lowval = flat.at<uchar>(cvFloor(((float)flat.cols) * half_percent));
+        int highval = flat.at<uchar>(cvCeil(((float)flat.cols) * (1.0 - half_percent)));
+	std::cout << lowval << " " << highval << std::endl;
+        
+        //saturate below the low percentile and above the high percentile
+        tmpsplit[i].setTo(lowval,tmpsplit[i] < lowval);
+        tmpsplit[i].setTo(highval,tmpsplit[i] > highval);
+        
+        //scale the channel
+        normalize(tmpsplit[i],tmpsplit[i],0,255,NORM_MINMAX);
+    }
+    merge(tmpsplit,out);
+}
+
 /**
  * Convert a packed array of n elements with vw useful bits into array of
  * 8bit elements, dropping LSB.
@@ -99,6 +127,7 @@ int main ()
     cv::Mat pOpenCVImage = Mat(ImageSize, CV_8UC4); //cvCreateImage(ImageSize , IPL_DEPTH_16U, 1 ); // Grayscale
     cv::Mat out = Mat(ImageSize, CV_8UC1);
     cv::Mat colorz = Mat(ImageSize, CV_8UC3);
+    cv::Mat wb = Mat(ImageSize, CV_8UC3);
 
     cv::Mat mat16 = Mat(ImageSize, CV_8UC2);  //cvCreateImage(ImageSize , IPL_DEPTH_16U, 3 ); // Color image
 
@@ -121,14 +150,14 @@ int num_el = rows*cols;
  int inputChan = 2;
 int len = num_el * inputChan;
 
- printf("Start capturing - %d by %d by %d for %d -\n",  pOpenCVImage.rows, pOpenCVImage.cols, pOpenCVImage.elemSize1(),     len);
+// printf("Start capturing - %d by %d by %d for %d -\n",  pOpenCVImage.rows, pOpenCVImage.cols, pOpenCVImage.elemSize1(),     len);
 
   unsigned short int buffer[ImageSize.width*ImageSize.height];
   unsigned char buffer8[ImageSize.width*ImageSize.height];
     while(wKey == -1 )
     {
         ImageBuffer = snapFrame();
-	std::cout << "Length of array = " << sizeof(ImageBuffer) << ", bis: " <<sizeof(*ImageBuffer) << " ter: " << sizeof(*ImageBuffer) << std::endl;
+	//std::cout << "Length of array = " << sizeof(ImageBuffer) << ", bis: " <<sizeof(*ImageBuffer) << " ter: " << sizeof(*ImageBuffer) << std::endl;
 
         if( ImageBuffer != NULL )
         {
@@ -215,8 +244,8 @@ int len = num_el * inputChan;
 	  cv::cvtColor(out, colorz, CV_BayerGB2RGB);
 	  imshow( "Display window rgb", colorz ); 
 
-
-
+	  SimplestCB(colorz,wb,1);
+	  imshow("AWB",wb);
 	  //////////////////////////
 	  // print_mat(pOpenCVImage);
 
@@ -225,7 +254,7 @@ int len = num_el * inputChan;
 	  ////////////////////////
 
 	  // cvShowImage( (char*)"Camera2",MatRgb);
-	  wKey = cvWaitKey(10);
+	  wKey = cvWaitKey(1);
         }
         else
 	  {
