@@ -50,8 +50,26 @@
 
 #define CTRL_TIMEOUT 500
 
+#define REG_COM7 0x12
+#define REG_DSP4 0x67
+
+// 0x80 from doc
 #define BLUE_BALANCE_DEFAULT	128
 #define RED_BALANCE_DEFAULT	128
+
+#define COM7_RESET  0x80
+#define COM7_SLCT_VGA        0x00	/*   0 : VGA */
+#define COM7_SLCT_QVGA       0x40	/*   1 : QVGA */
+
+// used to update COM7 register during RAW switch
+#define COM7_RAWMODE_MASK 0x13
+#define COM7_OFMT_YUV 0x00	/*      00 : YUV */
+#define COM7_OFMT_BRAW 0x03	/* 11 : Bayer RAW */
+#define COM7_SENSOR_RAW	0x10	/* Sensor RAW */
+// update DSP4 during raw switch
+#define DSP4_RAWMODE_MASK 0x03 
+#define DSP4_OFMT_YUV 0x00
+#define DSP4_OFMT_RAW10	0x03  /* 11: RAW10. FIXME: buggy. Should tell the bridge about that? */
 
 MODULE_AUTHOR("Antonio Ospite <ospite@studenti.unina.it>");
 MODULE_DESCRIPTION("GSPCA/OV534 USB Camera Driver");
@@ -82,6 +100,8 @@ struct sd {
         
 	struct v4l2_ctrl *redblc;
 	struct v4l2_ctrl *blueblc;
+
+  struct v4l2_ctrl *rawmode;
 	
 	__u32 last_pts;
 	u16 last_fid;
@@ -95,6 +115,7 @@ enum sensors {
 	NSENSORS
 };
 
+// backup for white balance
 static int redblc = RED_BALANCE_DEFAULT;
 static int blueblc = BLUE_BALANCE_DEFAULT;
 
@@ -102,12 +123,12 @@ static int sd_start(struct gspca_dev *gspca_dev);
 static void sd_stopN(struct gspca_dev *gspca_dev);
 
 static const struct v4l2_pix_format ov772x_mode[] = {
-  {320, 240, V4L2_PIX_FMT_SBGGR10, V4L2_FIELD_NONE,
+  {320, 240, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
 	 .bytesperline = 320 * 2,
 	 .sizeimage = 320 * 240 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
 	 .priv = 1},
-	{640, 480, V4L2_PIX_FMT_SBGGR10, V4L2_FIELD_NONE,
+	{640, 480, V4L2_PIX_FMT_YUYV, V4L2_FIELD_NONE,
 	 .bytesperline = 640 * 2,
 	 .sizeimage = 640 * 480 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
@@ -480,7 +501,7 @@ static const u8 bridge_init_772x[][2] = {
 	{ 0xc2, 0x0c },
 };
 static const u8 sensor_init_772x[][2] = {
-	{ 0x12, 0x80 },
+	{ REG_COM7, COM7_RESET},
 	{ 0x11, 0x01 },
 /*fixme: better have a delay?*/
 	{ 0x11, 0x01 },
@@ -584,11 +605,8 @@ static const u8 bridge_start_vga_772x[][2] = {
 	{0xc1, 0x3c},
 };
 static const u8 sensor_start_vga_772x[][2] = {
-  //	{0x12, 0x00},
-        {0x66, 0x00}, // DSP3
-        {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
-	{0x0c, 0x00}, // COM3
-        {0x12, 0x13}, // COM7 SENSOR_RAW | OFMT_BRAW,
+  	{REG_COM7, COM7_SLCT_VGA},
+        {REG_DSP4, DSP4_OFMT_YUV},
 	{0x17, 0x26},
 	{0x18, 0xa0},
 	{0x19, 0x07},
@@ -609,11 +627,8 @@ static const u8 bridge_start_qvga_772x[][2] = {
 	{0xc1, 0x1e},
 };
 static const u8 sensor_start_qvga_772x[][2] = {
-  //	{0x12, 0x40},
-        {0x66, 0x00}, // DSP3
-        {0x67, 0x03}, // DSP4 raw 10:3, raw 8: 2
-	{0x0c, 0x00}, // COM3
-        {0x12, 0x53}, // COM7 SENSOR_RAW | OFMT_BRAW,
+  	{REG_COM7, COM7_SLCT_QVGA},
+        {REG_DSP4, DSP4_OFMT_YUV},
 	{0x17, 0x3f},
 	{0x18, 0x50},
 	{0x19, 0x03},
@@ -985,16 +1000,40 @@ static void setagc(struct gspca_dev *gspca_dev, s32 val)
 
 static void setredblc(struct gspca_dev *gspca_dev, s32 val)
 {
-   //struct sd *sd = (struct sd *) gspca_dev;
    redblc = val;
    sccb_reg_write(gspca_dev, 0x43, val);
 }
 
 static void setblueblc(struct gspca_dev *gspca_dev, s32 val)
 {
-   //struct sd *sd = (struct sd *) gspca_dev;
    blueblc = val;
    sccb_reg_write(gspca_dev, 0x42, val);
+}
+
+// only enabled for OV277x sensor
+static void setrawmode(struct gspca_dev *gspca_dev, s32 val)
+{
+  struct sd *sd = (struct sd *) gspca_dev;
+  if (sd->sensor == SENSOR_OV772x) {
+
+    // retrieve current status for COM7/DSP4 and reset raw mode
+    u8 val_com7, val_dsp4;
+    val_com7 = sccb_reg_read(gspca_dev, REG_COM7) & ~COM7_RAWMODE_MASK;
+    val_dsp4 = sccb_reg_read(gspca_dev, REG_DSP4) & ~DSP4_RAWMODE_MASK;
+
+    if (val) { /* turn RAW on */
+      val_com7 |= COM7_OFMT_BRAW |  COM7_SENSOR_RAW;
+      val_dsp4 |= DSP4_OFMT_RAW10;
+      // TODO: also DSP3 {0x66, 0x00} and COM3 {0x0c, 0x00} ??
+      }
+    else { /* turn RAW off */
+      val_com7 |= COM7_OFMT_YUV;
+      val_dsp4 |= DSP4_OFMT_YUV;
+    }
+    // update registers
+    sccb_reg_write(gspca_dev, REG_COM7, val_com7);
+    sccb_reg_write(gspca_dev, REG_DSP4, val_dsp4);
+  }
 }
 
 static void setawb(struct gspca_dev *gspca_dev, s32 val)
@@ -1183,6 +1222,9 @@ static int ov534_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_BLUE_BALANCE:
 		setblueblc(gspca_dev, ctrl->val);
 		break;
+	case V4L2_CID_FOCUS_AUTO:
+	  setrawmode(gspca_dev, ctrl->val);
+	  break;
 	}
 	return gspca_dev->usb_err;
 }
@@ -1215,6 +1257,7 @@ static int sd_init_controls(struct gspca_dev *gspca_dev)
 	int blueblc_min = 0;
 	int blueblc_def = BLUE_BALANCE_DEFAULT;
 	int blueblc_max = 255;
+	int rawmode_def = 0;
 
 	if (sd->sensor == SENSOR_OV767x) {
 		saturation_min = 0,
@@ -1297,6 +1340,9 @@ static int sd_init_controls(struct gspca_dev *gspca_dev)
 	sd->blueblc = v4l2_ctrl_new_std(hdl, &ov534_ctrl_ops,
                         V4L2_CID_BLUE_BALANCE, blueblc_min, blueblc_max, 1, blueblc_def);
         
+	sd->rawmode = v4l2_ctrl_new_std(hdl, &ov534_ctrl_ops,
+					V4L2_CID_FOCUS_AUTO, 0, 1, 1, rawmode_def); // FIXME: proper V4L flag
+
 	if (hdl->error) {
 		pr_err("Could not initialize controls\n");
 		return hdl->error;
@@ -1334,7 +1380,7 @@ static int sd_init(struct gspca_dev *gspca_dev)
 	ov534_reg_write(gspca_dev, OV534_REG_ADDRESS, 0x42);
 
 	/* reset sensor */
-	sccb_reg_write(gspca_dev, 0x12, 0x80);
+	sccb_reg_write(gspca_dev, REG_COM7, COM7_RESET);
 	msleep(10);
 
 	/* probe the sensor */
