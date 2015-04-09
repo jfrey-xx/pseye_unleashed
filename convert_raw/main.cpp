@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdio.h>
 #include "v4ldevice.h"
+#include "pseye.hpp"
 
 using namespace cv;
 
@@ -200,56 +201,7 @@ int main ()
 	  // imshow("mat16 chan1", mat16chan[0]);
 	  //imshow("mat16 chan2", mat16chan[1]);
 	       
-	  //imshow( "mat16R",  mat16R); 
-	  vector<Mat> channels(4);
-	  // split img:
-	  split(pOpenCVImage, channels);
-
-	  // get ROIs out of noise
-	  // Mat GBg1
-	  Mat g1 = Mat( channels[0], Rect(0, 0, 80, 120));
-	  // Mat GBb1
-	  Mat b1 =  Mat( channels[0], Rect(160, 0, 80, 120));
-	  // Mat RGr2
-	  Mat r2 = Mat( channels[1], Rect(0, 0, 80, 120));
-	  // Mat RGg2
-	  Mat g2 =  Mat( channels[1], Rect(160, 0, 80, 120));
-	  // Mat GBg2
-	  Mat g3 = Mat( channels[2], Rect(0, 0, 80, 120));
-	  // Mat GBb2 =
-	  Mat b3 = Mat( channels[2], Rect(160, 0, 80, 120));
-	  // Mat RGr2 
-	  Mat r4 = Mat( channels[3], Rect(0, 0, 80, 120));
-	  // Mat RGg2 =
-	  Mat g4 = Mat( channels[3], Rect(160, 0, 80, 120));
-
-	  // imshow( "roi1",  g1 ); 
-	  // imshow( "roi2",  b1); 
-	  // imshow( "roi3",  g3); 
-	  // imshow( "roi4",  b3); 
-	  // imshow( "roi5",  r2); 
-	  // imshow( "roi6",  g2); 
-	  // imshow( "roi7",  r4); 
-	  // imshow( "roi8",  g4); 
-	  
-	  // create back from 8 rois the bayer pattern
-	  // G1B1 G3B3 G1R1 ...
-	  // R2G2 R4G4 R2G2 ...
-	  for (int j=0;j<g1.rows;j++) {
-	    for (int i=0;i< g1.cols ;i++) {
-	      int step = g1.step*j+i;
-	      out.data[out.step*(j*2)+i*4] = g1.data[step];
-	      out.data[out.step*(j*2)+i*4+1] = b1.data[step];
-	      out.data[out.step*(j*2)+i*4+2] = g3.data[step];
-	      out.data[out.step*(j*2)+i*4+3] = b3.data[step];
-
-	      out.data[out.step*(j*2+1)+i*4] = r2.data[step];
-	      out.data[out.step*(j*2+1)+i*4+1] = g2.data[step];
-	      out.data[out.step*(j*2+1)+i*4+2] = r4.data[step];
-	      out.data[out.step*(j*2+1)+i*4+3] = g4.data[step];
-	    }
-	  }
-
+	  Mat out = PSEyeBayer2RGB(pOpenCVImage);
 	  imshow("tadam", out);
 
 	  //imshow( "chan1",  channels[0] ); 
@@ -266,12 +218,14 @@ int main ()
 	  // memcpy( pack.data, buffer, len);
 
 
-	  cv::cvtColor(out, colorz, CV_BayerGB2RGB);
+   printf("return\n");
+	  colorz =out ;
 	  imshow( "Display window rgb", colorz ); 
 
 	  SimplestCB(colorz,wb,1);
 	  imshow("AWB",wb);
 
+   printf("return\n");
 
 	  //	  Mat toto = cv::Mat(ImageSize, CV_32FC1, ImageSize) ; 
 	  cv::normalize(colorz, colorz32, 0, 1, cv::NORM_MINMAX, CV_32FC3);
