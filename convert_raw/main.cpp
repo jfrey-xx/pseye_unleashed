@@ -30,60 +30,6 @@ static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw,
 	}
 }
 
-// argo from http://web.stanford.edu/~sujason/ColorBalancing/simplestcb.html
-// implementation from http://web.stanford.edu/~sujason/ColorBalancing/simplestcb.html
-/// perform the Simplest Color Balancing algorithm
-void SimplestCB(Mat& in, Mat& out, float percent) {
-    assert(in.channels() == 3);
-    assert(percent > 0 && percent < 100);
- 
-    float half_percent = percent / 200.0f;
- 
-    vector<Mat> tmpsplit; split(in,tmpsplit);
-    for(int i=0;i<3;i++) {
-        //find the low and high precentile values (based on the input percentile)
-        Mat flat; tmpsplit[i].reshape(1,1).copyTo(flat);
-        cv::sort(flat,flat,CV_SORT_EVERY_ROW + CV_SORT_ASCENDING);
-        int lowval = flat.at<uchar>(cvFloor(((float)flat.cols) * half_percent));
-        int highval = flat.at<uchar>(cvCeil(((float)flat.cols) * (1.0 - half_percent)));
-	std::cout << lowval << " " << highval << std::endl;
-        
-        //saturate below the low percentile and above the high percentile
-        tmpsplit[i].setTo(lowval,tmpsplit[i] < lowval);
-        tmpsplit[i].setTo(highval,tmpsplit[i] > highval);
-        
-        //scale the channel
-        normalize(tmpsplit[i],tmpsplit[i],0,255,NORM_MINMAX);
-    }
-    merge(tmpsplit,out);
-}
-
-// version with 32F matrix
-void SimplestCB32F(Mat& in, Mat& out, float percent) {
-    assert(in.channels() == 3);
-    assert(percent > 0 && percent < 100);
- 
-    float half_percent = percent / 200.0f;
- 
-    vector<Mat> tmpsplit; split(in,tmpsplit);
-    for(int i=0;i<3;i++) {
-        //find the low and high precentile values (based on the input percentile)
-        Mat flat; tmpsplit[i].reshape(1,1).copyTo(flat);
-        cv::sort(flat,flat,CV_SORT_EVERY_ROW + CV_SORT_ASCENDING);
-        float lowval32 = flat.at<float>(((float)flat.cols) * half_percent);
-        float highval32 = flat.at<float>(((float)flat.cols) * (1.0 - half_percent));
-	std::cout << "float: " << lowval32 << " " << highval32 << std::endl;
-        
-        //saturate below the low percentile and above the high percentile
-        tmpsplit[i].setTo(lowval32,tmpsplit[i] < lowval32);
-        tmpsplit[i].setTo(highval32,tmpsplit[i] > highval32);
-        
-        //scale the channel
-        normalize(tmpsplit[i],tmpsplit[i],0,1,NORM_MINMAX);
-    }
-    merge(tmpsplit,out);
-}
-
 /**
  * Convert a packed array of n elements with vw useful bits into array of
  * 8bit elements, dropping LSB.
@@ -222,7 +168,7 @@ int main ()
 	  colorz =out ;
 	  imshow( "Display window rgb", colorz ); 
 
-	  SimplestCB(colorz,wb,1);
+	  wb = SimplestCB(colorz,1);
 	  imshow("AWB",wb);
 
    printf("return\n");
@@ -233,7 +179,7 @@ int main ()
 	  //	  colorz.convertTo(colorz32, CV_32FC1); 
 	  //	  cvCvtScale(colorz,colorz32,1/255.,0);
 	  imshow("tadam32", colorz32);
-	  SimplestCB32F(colorz32,wb32,1);
+	  wb32 = SimplestCB(colorz32,1);
 	  imshow("AWB32",wb32);
 
 	  //////////////////////////
