@@ -1,0 +1,6 @@
+
+*.o
+test
+pseye2loopback
+opencv-test
+.#*
