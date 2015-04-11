@@ -130,7 +130,11 @@ Mat SimplestCBApply(Mat in, float min_colors[], float max_colors[]) {
     tmpsplit[i].setTo(min_colors[i],tmpsplit[i] < min_colors[i]);
     tmpsplit[i].setTo(max_colors[i],tmpsplit[i] >  max_colors[i]); 
     //scale the channel
-    cv::normalize(tmpsplit[i],tmpsplit[i],0,max_value,cv::NORM_MINMAX);
+    // NB: do no use normalize() as we want to keep the same scale as with previous boundaries
+    if (max_colors[i] != min_colors[i]) {
+      tmpsplit[i] -= (min_colors[i]);
+      tmpsplit[i] *= max_value / (max_colors[i] - min_colors[i]);
+    }
   }
 
   merge(tmpsplit,out);
@@ -190,18 +194,20 @@ Mat PSEyeWB::getFrame() {
 	  
       out = PSEyeBayer2RGB(pOpenCVImage);
 
-      // convert to 32F and normalize
-      normalize(out, colorz32f, 0, 1, cv::NORM_MINMAX, CV_32FC3);
-      
+      // convert to 32F and scale to 0-1
+      out.convertTo(colorz32f, CV_32F);
+      // NB: does not use normalize here and later on to keep scale
+      colorz32f = colorz32f / 255.;
+
       if (updateWB_next || updateWB_continuous) {
-	for (int i = 0; i < 3; i++) {
-	}
+	SimplestCBUpdateBoundaries(colorz32f, 1, min_colors, max_colors);
 	updateWB_next = false;
       }
       // correct colors, still in 32f, then convert back to 8u before sending to loopback
-      wb32f = SimplestCB(colorz32f,1);	  
-      normalize(wb32f, wb, 0, 255, cv::NORM_MINMAX, CV_8UC3);
-
+      wb32f = SimplestCBApply(colorz32f,min_colors, max_colors);
+      wb32f *= 255;
+      wb32f.convertTo(wb, CV_8U);
+      
       // check how bytes are stored in the matrix, clone it should set things straight
       if (!wb.isContinuous()) {
 	wb = wb.clone();
@@ -212,6 +218,10 @@ Mat PSEyeWB::getFrame() {
       cout << "No image buffer retrieved." << endl;
     }
   return wb;
+}
+
+void PSEyeWB::updateWB() {
+  updateWB_next = true;
 }
 
 void PSEyeWB::setContinuousWB(bool flag) {

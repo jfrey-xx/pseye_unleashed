@@ -66,7 +66,6 @@ int main (int argc, char * argv[])
   cout << "Using" << video_device_in << " for PS Eye, at " << width << "x" << height << endl;
   cout << "Using" << video_device_out << " for loopback" << endl;
 
-
   char wKey = -1;
 
   /***** setting up loopback *****/
@@ -75,23 +74,23 @@ int main (int argc, char * argv[])
   OutLoop loop = OutLoop(video_device_out, width, height);
 
   /***** setting up ps eye *****/
-  PSEyeWB pseye = PSEyeWB(video_device_in, width, height);
+  PSEyeWB pseye = PSEyeWB(video_device_in, width, height, false);
 
   // ESC to escape
   while(wKey != 27)
     {
-    
+      // we got something with SPACE
+      if (wKey == 32) {
+	cout << "Updating WB" << endl;
+	pseye.updateWB();
+      }
+
       Mat wb = pseye.getFrame();
       imshow("PS eye WB " + video_device_in, wb);
 
       loop.sendFrame(wb);
 
       wKey = waitKey(1);
-	  
-      // we got something with SPACE
-      if (wKey == 32) {
-	cout << "trigger" << endl;
-      }
     }
 
   cout << "Program ended" << endl;
