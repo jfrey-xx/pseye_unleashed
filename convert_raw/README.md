@@ -16,6 +16,4 @@ Enable raw mode and set frame rate for ps eye:
 
 Launch pseye2loopback
 
-> $ ./pseye2loopback
-
-
+> $ ./pseye2loopback --width 640 --height 480 --video-in /dev/video0 --video-out /dev/video10
