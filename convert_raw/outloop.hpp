@@ -7,6 +7,7 @@ using namespace cv;
 class OutLoop {
 public:
   OutLoop(string video_device, int width, int height);
+  ~OutLoop(void);
   int sendFrame(Mat frame);
 private:
   string video_device;

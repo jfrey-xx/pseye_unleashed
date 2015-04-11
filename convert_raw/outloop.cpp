@@ -45,3 +45,8 @@ OutLoop::OutLoop(string video_device, int width, int height) {
     // TODO: assertion about matrix size
     return write(fd, frame.data, width * height * 3);
 }
+
+OutLoop::~OutLoop(void) {
+  cout << "Closing loopback device" << endl;
+  close(fd);
+}
