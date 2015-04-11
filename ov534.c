@@ -132,7 +132,7 @@ static const struct v4l2_pix_format ov772x_mode[] = {
 	 .bytesperline = 640 * 2,
 	 .sizeimage = 640 * 480 * 2,
 	 .colorspace = V4L2_COLORSPACE_SRGB,
-	 .priv = 1}, // set to 1 for raw
+	 .priv = 0},
 };
 static const struct v4l2_pix_format ov767x_mode[] = {
 	{320, 240, V4L2_PIX_FMT_JPEG, V4L2_FIELD_NONE,
@@ -794,12 +794,13 @@ static void set_frame_rate(struct gspca_dev *gspca_dev)
 		u8 re5;
 	};
 	const struct rate_s *r;
+	 /* FIXME: 40 to 60 not working with raw */ 
 	static const struct rate_s rate_0[] = {	/* 640x480 */
-		{60, 0x01, 0xc1, 0x04},
-		{50, 0x01, 0x41, 0x02},
-		{40, 0x02, 0xc1, 0x04},
-		{30, 0x04, 0x81, 0x02},
-		{15, 0x03, 0x41, 0x04},
+	  {60, 0x01, 0xc1, 0x04},
+	  {50, 0x01, 0x41, 0x02},
+	  {40, 0x02, 0xc1, 0x04}, /* also	{40, 0x03, 0xc1, 0x02} */
+	  {30, 0x04, 0x81, 0x02},
+	  {15, 0x03, 0x41, 0x04},
 	};
 	static const struct rate_s rate_1[] = {	/* 320x240 */
 		{125, 0x02, 0x81, 0x02},
