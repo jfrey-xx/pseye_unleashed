@@ -1,8 +1,10 @@
 #include "pseye.hpp"
 #include <iostream>
-#include "opencv2/opencv.hpp"
+#include <opencv2/opencv.hpp>
+#include "v4ldevice.cpp"
 
 using namespace cv;
+using namespace std;
 
 // get a 8UC1 matrix fetched from a PS Eye with raw patch, returns a 8UC3 matrix
 Mat PSEyeBayer2RGB(Mat src) {
@@ -110,13 +112,67 @@ cv::Mat SimplestCB(Mat in, float percent) {
     tmpsplit[i].setTo(highval,tmpsplit[i] > highval); 
     
     //scale the channel
-    if (type_float) {
       normalize(tmpsplit[i],tmpsplit[i],0,max_value,NORM_MINMAX);
-      }
-    else {
-      normalize(tmpsplit[i],tmpsplit[i],0,max_value,NORM_MINMAX);
-    }
   }
   merge(tmpsplit,out);
   return out;
+}
+
+PSEyeWB::PSEyeWB(std::string video_device, int width, int height) {
+  ImageSize.width = width;
+  ImageSize.height = height;
+
+  pOpenCVImage = Mat(ImageSize, CV_8UC4);
+  out = Mat(ImageSize, CV_8UC1);
+  colorz32f = Mat(ImageSize, CV_32FC3);
+  wb32f = Mat(ImageSize, CV_32FC3);
+  wb = Mat(ImageSize, CV_8UC3);
+
+  open_device((char*)video_device.c_str());
+  init_device(ImageSize.width, ImageSize.height);
+
+  cout << "Start capturing" << endl;
+  start_capturing();
+
+  int rows = pOpenCVImage.rows;
+  int cols = pOpenCVImage.cols;
+  int num_el = rows*cols;
+  int inputChan = 2; // the driver uses 16 bits
+  len = num_el * inputChan;
+}
+
+Mat PSEyeWB::getFrame() {
+  ImageBuffer = snapFrame();
+
+  if( ImageBuffer != NULL )
+    {
+      // retrieve bytes array
+      memcpy( pOpenCVImage.data, ImageBuffer, len);
+	  
+      out = PSEyeBayer2RGB(pOpenCVImage);
+
+      // convert to 32F and normalize
+      normalize(out, colorz32f, 0, 1, cv::NORM_MINMAX, CV_32FC3);
+	  
+      // correct colors, still in 32f, then convert back to 8u before sending to loopback
+      wb32f = SimplestCB(colorz32f,1);	  
+      normalize(wb32f, wb, 0, 255, cv::NORM_MINMAX, CV_8UC3);
+
+      // check how bytes are stored in the matrix, clone it should set things straight
+      if (!wb.isContinuous()) {
+	wb = wb.clone();
+      }
+    }
+  else
+    {
+      cout << "No image buffer retrieved." << endl;
+    }
+  return wb;
+}
+
+PSEyeWB::~PSEyeWB(void) {
+  cout << "Closing V4L device..." << endl;
+  stop_capturing();
+  uninit_device();
+  close_device();
 }
