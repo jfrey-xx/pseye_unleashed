@@ -10,8 +10,8 @@ using namespace std;
 
 #define WIDTH 640
 #define HEIGHT 480
-#define DEVICE "/dev/video1"
-#define FPS 30
+#define DEVICE_IN "/dev/video0"
+#define DEVICE_OUT "/dev/video1"
 
 int main ()
 {
@@ -22,14 +22,15 @@ int main ()
 
   ImageSize.width = WIDTH;
   ImageSize.height = HEIGHT;
-  string video_device_out = DEVICE;
+  string video_device_out = DEVICE_OUT;
+  string video_device_in = DEVICE_IN;
 
   cout << "Program started" << endl;
 
   /***** setting up loopback *****/
   cout << "Init V4L loopback" << endl;
 
-  OutLoop loop = OutLoop(video_device_out, ImageSize.width, ImageSize.height, FPS);
+  OutLoop loop = OutLoop(video_device_out, ImageSize.width, ImageSize.height);
 
   /***** setting up ps eye *****/
 
@@ -39,7 +40,7 @@ int main ()
   cv::Mat wb32f = Mat(ImageSize, CV_32FC3);
   cv::Mat wb = Mat(ImageSize, CV_8UC3);
 
-  open_device((char*)"/dev/video0");
+  open_device((char*)video_device_in.c_str());
   init_device(ImageSize.width, ImageSize.height);
 
   cout << "Start capturing" << endl;

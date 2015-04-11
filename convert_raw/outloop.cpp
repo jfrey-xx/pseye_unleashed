@@ -8,10 +8,9 @@
 
 using namespace std;
 
-OutLoop::OutLoop(string video_device, int width, int height, int fps) {
+OutLoop::OutLoop(string video_device, int width, int height) {
   this->width = width;
   this->height = height;
-  this->fps = fps;
 
   cout << "Openning " << video_device << " ..." << endl;
   int fd = open(video_device.c_str(), O_RDWR);

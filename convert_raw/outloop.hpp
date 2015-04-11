@@ -6,10 +6,10 @@ using namespace cv;
 
 class OutLoop {
 public:
-  OutLoop(string video_device, int width, int height, int fps);
+  OutLoop(string video_device, int width, int height);
   int sendFrame(Mat frame);
 private:
   string video_device;
   int fd;
-  int width, height, fps;
+  int width, height;
 };
