@@ -5,20 +5,6 @@
 #include <iostream>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
-/*
-
-#include <linux/videodev2.h>
-#include <sys/ioctl.h>
-
-#include <fstream>  
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <assert.h>
-*/
-
 
 using namespace std;
 
@@ -33,8 +19,6 @@ OutLoop::OutLoop(string video_device, int width, int height, int fps) {
   
   this->fd = fd;
 
-  cout << "hello" << endl;
-  
   // what should handle
   struct v4l2_capability vid_caps;
   cout << "Checking video cpapabilities..." << endl;
@@ -56,7 +40,9 @@ OutLoop::OutLoop(string video_device, int width, int height, int fps) {
   assert(ret_code != -1);
 }
 
+// expects to get 8UC3 matrix!
   int OutLoop::sendFrame(Mat frame) {
+    assert(frame.type() == CV_8UC3);
     // TODO: assertion about matrix size
     return write(fd, frame.data, width * height * 3);
 }

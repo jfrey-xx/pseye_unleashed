@@ -33,10 +33,11 @@ int main ()
 
   /***** setting up ps eye *****/
 
-  cv::Mat pOpenCVImage = Mat(ImageSize, CV_8UC4); //cvCreateImage(ImageSize , IPL_DEPTH_16U, 1 ); // Grayscale
+  cv::Mat pOpenCVImage = Mat(ImageSize, CV_8UC4);
   cv::Mat out = Mat(ImageSize, CV_8UC1);
-  cv::Mat colorz32 = Mat(ImageSize, CV_32FC3);
-  cv::Mat wb32 = Mat(ImageSize, CV_32FC3);
+  cv::Mat colorz32f = Mat(ImageSize, CV_32FC3);
+  cv::Mat wb32f = Mat(ImageSize, CV_32FC3);
+  cv::Mat wb = Mat(ImageSize, CV_8UC3);
 
   open_device((char*)"/dev/video0");
   init_device(ImageSize.width, ImageSize.height);
@@ -58,19 +59,26 @@ int main ()
 
       if( ImageBuffer != NULL )
         {
-	    
+	  // retrieve bytes array
 	  memcpy( pOpenCVImage.data, ImageBuffer, len);
-	       
+	  
 	  out = PSEyeBayer2RGB(pOpenCVImage);
 	  imshow("tadam", out);
 
 	  // convert to 32F and normalize
-	  normalize(out, colorz32, 0, 1, cv::NORM_MINMAX, CV_32FC3);
+	  normalize(out, colorz32f, 0, 1, cv::NORM_MINMAX, CV_32FC3);
+	  
+	  // correct colors, still in 32f, then convert back to 8u before sending to loopback
+	  wb32f = SimplestCB(colorz32f,1);
+	  imshow("AWB",wb32f);
+	  
+	  normalize(wb32f, wb, 0, 255, cv::NORM_MINMAX, CV_8UC3);
+	  // check how bytes are stored in the matrix, clone it should set things straight
+	  if (!wb.isContinuous()) {
+	    wb = wb.clone();
+	  }
 
-	  wb32 = SimplestCB(colorz32,1);
-	  imshow("AWB",wb32);
-
-	  loop.sendFrame(wb32);
+	  loop.sendFrame(wb);
 
 	  wKey = waitKey(1);
 	  
