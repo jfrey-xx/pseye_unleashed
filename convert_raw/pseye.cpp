@@ -56,42 +56,35 @@ Mat PSEyeBayer2RGB(Mat src) {
     }
   }
 
-  cv::cvtColor(tmp, out, CV_BayerGB2RGB);
+  cvtColor(tmp, out, CV_BayerGB2RGB);
   return out;
 }
 
-// auto white-balance
-// algo from http://web.stanford.edu/ps~sujason/ColorBalancing/simplestcb.html
-// implementation from http://web.stanford.edu/~sujason/ColorBalancing/simplestcb.html
-/// perform the Simplest Color Balancing algorithm
-// returns NULL if input matrix not supported
-cv::Mat SimplestCB(Mat in, float percent) {
+// carefull, number of channels of Mat in must match min/max_colors array size
+void SimplestCBUpdateBoundaries(Mat in, float percent, float *min_colors, float *max_colors) {
   assert(percent > 0 && percent < 100);
 
   // two sligthly different calls depending on the data type, default to float
   bool type_float = true;
-  int max_value;
 
-  switch (in.type()) {
-  case CV_8UC3:
-    max_value = 255; //TODO: trivial to add 16
+  switch (in.depth()) {
+  case CV_8U:
+  case CV_16U:
     type_float = false;
     break;
-  case CV_32FC3:
-  case CV_64FC3:
-    max_value = 1;
+  case CV_32F:
+  case CV_64F:
     type_float = true;
     break;
   default:
-    assert(1); // should not be here
+    assert(0); // should not be here
   }
 
-  cv::Mat out = in.clone();
-
   float half_percent = percent / 200.0f;
- 
+
   vector<Mat> tmpsplit; split(in,tmpsplit);
-  for(int i=0;i<3;i++) {
+
+  for(int i=0;i<(int)tmpsplit.size();i++) {
     //find the low and high precentile values (based on the input percentile)
     Mat flat; tmpsplit[i].reshape(1,1).copyTo(flat);
     cv::sort(flat,flat,CV_SORT_EVERY_ROW + CV_SORT_ASCENDING);
@@ -106,19 +99,65 @@ cv::Mat SimplestCB(Mat in, float percent) {
       lowval = flat.at<uchar>(cvFloor(((float)flat.cols) * half_percent));
       highval = flat.at<uchar>(cvCeil(((float)flat.cols) * (1.0 - half_percent)));   
     }
-
-    //saturate below the low percentile and above the high percentile
-    tmpsplit[i].setTo(lowval,tmpsplit[i] < lowval);
-    tmpsplit[i].setTo(highval,tmpsplit[i] > highval); 
-    
-    //scale the channel
-      normalize(tmpsplit[i],tmpsplit[i],0,max_value,NORM_MINMAX);
+    min_colors[i] = lowval;
+    max_colors[i] = highval;
   }
+}
+
+// Apply SimpleCB with previously computed boundaries
+Mat SimplestCBApply(Mat in, float min_colors[], float max_colors[]) {
+
+  int max_value;
+
+  switch (in.depth()) {
+  case CV_8U:
+    max_value = 255; //TODO: trivial to add 16
+    break;
+  case CV_32F:
+  case CV_64F:
+    max_value = 1;
+    break;
+  default:
+    assert(0); // should not be here
+  }
+
+  Mat out = in.clone();
+
+  vector<Mat> tmpsplit; split(in,tmpsplit);
+
+  for(int i=0;i<(int)tmpsplit.size();i++) {
+    //saturate below the low percentile and above the high percentile
+    tmpsplit[i].setTo(min_colors[i],tmpsplit[i] < min_colors[i]);
+    tmpsplit[i].setTo(max_colors[i],tmpsplit[i] >  max_colors[i]); 
+    //scale the channel
+    cv::normalize(tmpsplit[i],tmpsplit[i],0,max_value,cv::NORM_MINMAX);
+  }
+
   merge(tmpsplit,out);
   return out;
 }
 
-PSEyeWB::PSEyeWB(std::string video_device, int width, int height) {
+// auto white-balance
+// algo from http://web.stanford.edu/ps~sujason/ColorBalancing/simplestcb.html
+// implementation from http://web.stanford.edu/~sujason/ColorBalancing/simplestcb.html
+/// perform the Simplest Color Balancing algorithm
+// returns NULL if input matrix not supported
+Mat SimplestCB(Mat in, float percent) {
+  int n = in.channels();
+  float min_colors[n];
+  float max_colors[n];
+  SimplestCBUpdateBoundaries(in, percent, min_colors, max_colors);
+  return SimplestCBApply(in, min_colors, max_colors);
+}
+
+PSEyeWB::PSEyeWB(std::string video_device, int width, int height, bool continuousWB) {
+  // init WB state
+  setContinuousWB(continuousWB);
+  for (int i = 0; i < 3; i++) {
+    min_colors[i]=0;
+    max_colors[i]=1;
+  }
+
   ImageSize.width = width;
   ImageSize.height = height;
 
@@ -153,7 +192,12 @@ Mat PSEyeWB::getFrame() {
 
       // convert to 32F and normalize
       normalize(out, colorz32f, 0, 1, cv::NORM_MINMAX, CV_32FC3);
-	  
+      
+      if (updateWB_next || updateWB_continuous) {
+	for (int i = 0; i < 3; i++) {
+	}
+	updateWB_next = false;
+      }
       // correct colors, still in 32f, then convert back to 8u before sending to loopback
       wb32f = SimplestCB(colorz32f,1);	  
       normalize(wb32f, wb, 0, 255, cv::NORM_MINMAX, CV_8UC3);
@@ -168,6 +212,11 @@ Mat PSEyeWB::getFrame() {
       cout << "No image buffer retrieved." << endl;
     }
   return wb;
+}
+
+void PSEyeWB::setContinuousWB(bool flag) {
+  updateWB_next = flag;
+  updateWB_continuous = flag;
 }
 
 PSEyeWB::~PSEyeWB(void) {
