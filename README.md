@@ -3,8 +3,11 @@
 
 Install kernel sources in =/usr/src/linux=, copy over ov534.c to =drivers/media/usb/gspca/=
 
+> apt-get install kernel-package build-essential linux-source
+> cd /usr/src
+> tar xvjf linux-source-3.XX.YY.tar.bz2
+> ln -s usr/src/linux-source-3.XX.YY /usr/src/linux
 > cp /usr/src/linux-headers-$(uname -r)/Module.symvers /usr/src/linux
-> cd /usr/src/linux
 > make oldconfig
 > make modules_prepare
 > make SUBDIRS=drivers/media/usb/gspca/ modules 
