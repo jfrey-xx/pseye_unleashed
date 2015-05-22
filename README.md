@@ -17,7 +17,7 @@ Install kernel sources in =/usr/src/linux=, copy over ov534.c to =drivers/media/
 
 # launch program
 
-Depends on v4l2loopback
+Depends on v4l2loopback + libopencv-dev + libv4l-dev
 
 ## V4L2 loopback
 
