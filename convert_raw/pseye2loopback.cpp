@@ -35,6 +35,9 @@ int main (int argc, char * argv[])
   int height = HEIGHT;
   string video_device_out = DEVICE_OUT;
   string video_device_in = DEVICE_IN;
+ 
+  bool vflip = false;
+  bool hflip = false;
 
   /***** retrieving options ****/
   if(cmdOptionExists(argv, argv+argc, "--help"))
@@ -43,6 +46,8 @@ int main (int argc, char * argv[])
       cout << "\t --width 640 --height 480 \t set resolution" << endl;
       cout << "\t --video-in /dev/video0 \t to set PS Eye input device" << endl;
       cout << "\t --video-out /dev/video1 \t to set loopback output device" << endl;
+      cout << "\t --vflip \t to mirror image vertically" << endl;
+      cout << "\t --hflip \t to mirror image horizontally" << endl;
       return 0;
     }
 
@@ -62,9 +67,16 @@ int main (int argc, char * argv[])
    if (op_video_out) {
      video_device_out.assign(op_video_out);
    }
+   if(cmdOptionExists(argv, argv+argc, "--vflip")) {
+     vflip = true;
+   }
+   if(cmdOptionExists(argv, argv+argc, "--hflip")) {
+     hflip = true;
+   }
 
   cout << "Using" << video_device_in << " for PS Eye, at " << width << "x" << height << endl;
   cout << "Using" << video_device_out << " for loopback" << endl;
+  cout << "Vertical flip: " << vflip << "; horizontal flip: " << hflip << endl;
 
   char wKey = -1;
 
@@ -86,6 +98,18 @@ int main (int argc, char * argv[])
       }
 
       Mat wb = pseye.getFrame();
+      
+      // flip: "0 means flipping around the x-axis and positive value (for example, 1) means flipping around y-axis. Negative value (for example, -1) means flipping around both axes"
+      if (hflip and vflip) {
+        flip(wb, wb, -1);
+      }
+      else if (vflip) {
+        flip(wb, wb, 0);
+      }
+      else if (hflip) {
+        flip(wb, wb, 1);
+      }
+      
       imshow("PS eye WB " + video_device_in, wb);
 
       loop.sendFrame(wb);

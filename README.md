@@ -42,3 +42,5 @@ Disable set exposure to manual and then to higher value, disable autogain
 ## Launch pseye2loopback
 
 > $ ./pseye2loopback --width 640 --height 480 --video-in /dev/video0 --video-out /dev/video10
+
+WARNING: due to the way the bayer matrix is encoded / decoded, **do not** use the V4L "vertical flip" flag. Instead use arguments for pseye2loopback "--vflip" (also "--hflip" added for commodity).
